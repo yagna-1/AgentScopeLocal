@@ -4,6 +4,9 @@ from typing import Sequence
 from opentelemetry.sdk.trace import ReadableSpan
 from opentelemetry.sdk.trace.export import SpanExporter, SpanExportResult
 
+from .model_detector import detector
+
+
 class SQLiteSpanExporter(SpanExporter):
     def __init__(self, db_path: str):
         self.db_path = db_path
@@ -17,9 +20,9 @@ class SQLiteSpanExporter(SpanExporter):
                 import sqlite_vec
                 sqlite_vec.load(conn)
             except ImportError:
-                pass # Handle gracefully if vector support isn't needed immediately
+                pass
 
-            # Create the Spans table
+            # Create the Spans table with enhanced schema
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS spans (
                     span_id TEXT PRIMARY KEY,
@@ -33,36 +36,38 @@ class SQLiteSpanExporter(SpanExporter):
                     status_message TEXT,
                     attributes JSON,
                     events JSON,
-                    resource JSON
+                    resource JSON,
+                    
+                    -- Enhanced fields for model detection
+                    provider TEXT,
+                    model_name TEXT,
+                    model_family TEXT,
+                    prompt_tokens INTEGER,
+                    completion_tokens INTEGER,
+                    total_tokens INTEGER,
+                    reasoning_tokens INTEGER,
+                    estimated_cost_usd REAL
                 );
             """)
             conn.execute("CREATE INDEX IF NOT EXISTS idx_trace_id ON spans(trace_id);")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_start_time ON spans(start_time);")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_provider ON spans(provider);")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_model_name ON spans(model_name);")
 
-            # Vector Debugging Schema
-            # 1. Create a Virtual Table for Embeddings
-            # We use a 1536-dim float array (standard for OpenAI ada-002/003)
-            try:
-                conn.execute("""
-                    CREATE VIRTUAL TABLE IF NOT EXISTS debug_vectors USING vec0(
-                        embedding float[1536]
-                    );
-                """)
-            except sqlite3.OperationalError:
-                 # Fallback or ignore if vec0 not available/loaded
-                 pass
-
-            # 2. Create a Metadata Table linking Spans to Vectors
+            # Vector Metadata Table (dimension-agnostic metadata)
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS vector_metadata (
-                    rowid INTEGER PRIMARY KEY, -- Links to debug_vectors.rowid
-                    trace_id TEXT NOT NULL,
-                    span_id TEXT NOT NULL,
-                    vector_type TEXT, -- 'query', 'retrieved_doc', 'generated_doc'
-                    text_content TEXT, -- The actual text chunk
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    vector_rowid INTEGER,
+                    table_name TEXT,
+                    span_id TEXT,
+                    trace_id TEXT,
+                    content TEXT,
                     metadata JSON
                 );
             """)
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_vm_span ON vector_metadata(span_id);")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_vm_trace ON vector_metadata(trace_id);")
 
     def export(self, spans: Sequence[ReadableSpan]) -> SpanExportResult:
         try:
@@ -79,6 +84,8 @@ class SQLiteSpanExporter(SpanExporter):
                 
                 # Serialize Attributes and Events
                 attributes_json = json.dumps(dict(span.attributes)) if span.attributes else "{}"
+                attrs = dict(span.attributes) if span.attributes else {}
+                
                 events_json = json.dumps([
                     {
                         "name": e.name, 
@@ -87,24 +94,49 @@ class SQLiteSpanExporter(SpanExporter):
                     } for e in span.events
                 ])
                 
+                # Enhanced: Detect provider and extract model info
+                provider = detector.detect_provider(attrs)
+                model_name = attrs.get('gen_ai.request.model', attrs.get('gen_ai.response.model', None))
+                
+                # Get model family from registry
+                from .model_registry import registry
+                model_family = registry.get_model_family(model_name) if model_name else None
+                
+                # Extract token usage and cost
+                usage = detector.extract_cost_info(attrs, provider)
+                
                 data.append((
                     span_id, trace_id, parent_id, span.name, span.kind.name,
                     span.start_time, span.end_time, span.status.status_code.name,
                     span.status.description, attributes_json, events_json,
-                    json.dumps(dict(span.resource.attributes))
+                    json.dumps(dict(span.resource.attributes)),
+                    
+                    # Enhanced fields
+                    provider,
+                    model_name,
+                    model_family,
+                    usage.get('prompt_tokens'),
+                    usage.get('completion_tokens'),
+                    usage.get('total_tokens'),
+                    usage.get('reasoning_tokens'),
+                    usage.get('estimated_cost_usd')
                 ))
 
             with sqlite3.connect(self.db_path) as conn:
                 conn.executemany("""
                     INSERT OR REPLACE INTO spans 
                     (span_id, trace_id, parent_span_id, name, kind, start_time, end_time, 
-                     status_code, status_message, attributes, events, resource)
-                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+                     status_code, status_message, attributes, events, resource,
+                     provider, model_name, model_family, prompt_tokens, completion_tokens,
+                     total_tokens, reasoning_tokens, estimated_cost_usd)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """, data)
                 
             return SpanExportResult.SUCCESS
         except Exception as e:
             print(f"Error exporting spans: {e}")
+            import traceback
+            traceback.print_exc()
             return SpanExportResult.FAILURE
 
     def shutdown(self):
