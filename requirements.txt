@@ -1,0 +1,7 @@
+opentelemetry-api
+opentelemetry-sdk
+sqlite-vec
+numpy
+fastapi
+uvicorn
+pydantic
