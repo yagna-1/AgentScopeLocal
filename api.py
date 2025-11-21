@@ -112,6 +112,7 @@ def get_trace(trace_id: str):
 
 @app.get("/vectors/{span_id}")
 def get_vectors(span_id: str):
+    """Get all vectors associated with a span"""
     conn = get_db_connection()
     cursor = conn.cursor()
     
@@ -121,13 +122,182 @@ def get_vectors(span_id: str):
     
     vectors = []
     for row in rows:
+        metadata = json.loads(row["metadata"]) if row["metadata"] else {}
         vectors.append({
-            "text_content": row["text_content"],
-            "metadata": json.loads(row["metadata"]) if row["metadata"] else {},
-            "vector_type": row["vector_type"]
+            "id": row["id"],
+            "content": row["content"],
+            "metadata": metadata,
+            "table_name": row["table_name"],
+            "vector_rowid": row["vector_rowid"]
         })
         
     return vectors
+
+
+@app.post("/api/debug-rag/{span_id}")
+def debug_rag(span_id: str, limit: int = 10):
+    """
+    Debug RAG by finding similar vectors.
+    Shows what chunks SHOULD have been retrieved.
+    """
+    conn = get_db_connection()
+    conn.enable_load_extension(True)
+    
+    try:
+        import sqlite_vec
+        sqlite_vec.load(conn)
+    except ImportError:
+        raise HTTPException(status_code=500, detail="sqlite-vec not available")
+    
+    cursor = conn.cursor()
+    
+    # Get the vector(s) for this span
+    cursor.execute("""
+        SELECT vector_rowid, table_name, content, metadata 
+        FROM vector_metadata 
+        WHERE span_id = ?
+        LIMIT 1
+    """, (span_id,))
+    
+    query_row = cursor.fetchone()
+    if not query_row:
+        raise HTTPException(status_code=404, detail="No vectors found for this span")
+    
+    table_name = query_row["table_name"]
+    vector_rowid = query_row["vector_rowid"]
+    query_content = query_row["content"]
+    
+    # Get the query vector
+    query_vector = cursor.execute(
+        f"SELECT embedding FROM {table_name} WHERE rowid = ?",
+        (vector_rowid,)
+    ).fetchone()
+    
+    if not query_vector:
+        raise HTTPException(status_code=404, detail="Vector data not found")
+    
+    # Find similar vectors (excluding the query itself)
+    similar = cursor.execute(f"""
+        SELECT 
+            vm.id,
+            vm.span_id,
+            vm.content,
+            vm.metadata,
+            vec_distance_cosine(v.embedding, ?) as distance,
+            (1 - vec_distance_cosine(v.embedding, ?)) as similarity
+        FROM {table_name} v
+        JOIN vector_metadata vm ON v.rowid = vm.vector_rowid AND vm.table_name = ?
+        WHERE vm.span_id != ?
+        ORDER BY distance ASC
+        LIMIT ?
+    """, (query_vector["embedding"], query_vector["embedding"], table_name, span_id, limit)).fetchall()
+    
+    conn.close()
+    
+    results = []
+    for row in similar:
+        metadata = json.loads(row["metadata"]) if row["metadata"] else {}
+        results.append({
+            "id": row["id"],
+            "span_id": row["span_id"],
+            "content": row["content"],
+            "metadata": metadata,
+            "distance": row["distance"],
+            "similarity": row["similarity"]
+        })
+    
+    return {
+        "query": {
+            "span_id": span_id,
+            "content": query_content
+        },
+        "similar_vectors": results
+    }
+
+
+class ForkRequest(BaseModel):
+    modified_prompt: str
+    temperature: Optional[float] = 0.7
+    max_tokens: Optional[int] = None
+
+
+@app.post("/api/fork/{span_id}")
+def fork_span(span_id: str, request: ForkRequest):
+    """
+    Time Travel: Fork an LLM call with a modified prompt.
+    Re-runs the LLM with the new prompt and returns the result.
+    """
+    from agentscope.llm_client import llm_client
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Get the original span
+    cursor.execute("SELECT * FROM spans WHERE span_id = ?", (span_id,))
+    span_row = cursor.fetchone()
+    conn.close()
+    
+    if not span_row:
+        raise HTTPException(status_code=404, detail="Span not found")
+    
+    # Parse attributes
+    attributes = json.loads(span_row["attributes"]) if span_row["attributes"] else {}
+    
+    # Extract model info
+    provider = span_row["provider"]
+    model = span_row["model_name"]
+    
+    if not provider or not model:
+        raise HTTPException(
+            status_code=400, 
+            detail="Span does not contain LLM call information (missing provider or model)"
+        )
+    
+    # Check if client is available
+    if not llm_client.is_available(provider):
+        raise HTTPException(
+            status_code=503,
+            detail=f"Provider '{provider}' is not available. Check API keys or installation."
+        )
+    
+    # Extract original prompt (if available)
+    original_prompt = attributes.get("gen_ai.prompt", "")
+    original_completion = attributes.get("gen_ai.completion", "")
+    
+    # Build messages
+    messages = [{"role": "user", "content": request.modified_prompt}]
+    
+    try:
+        # Call the LLM
+        response = llm_client.call(
+            provider=provider,
+            model=model,
+            messages=messages,
+            temperature=request.temperature,
+            max_tokens=request.max_tokens
+        )
+        
+        return {
+            "original": {
+                "span_id": span_id,
+                "provider": provider,
+                "model": model,
+                "prompt": original_prompt,
+                "completion": original_completion,
+                "prompt_tokens": span_row["prompt_tokens"],
+                "completion_tokens": span_row["completion_tokens"],
+            },
+            "forked": {
+                "prompt": request.modified_prompt,
+                "completion": response["content"],
+                "model": response["model"],
+                "usage": response["usage"],
+                "finish_reason": response["finish_reason"],
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"LLM call failed: {str(e)}")
+
 
 if __name__ == "__main__":
     import uvicorn
