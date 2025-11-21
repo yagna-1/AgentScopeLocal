@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { TraceList } from './components/TraceList';
 import { Timeline } from './components/Timeline';
 import { SpanDetails } from './components/SpanDetails';
+import { RagDebugPanel } from './components/RagDebugPanel';
+import { ForkModal } from './components/ForkModal';
 import { fetchTraces, fetchTrace } from './api';
 import type { TraceSummary } from './api';
 import { buildTraceTree } from './utils/transform';
@@ -13,6 +15,10 @@ function App() {
   const [selectedTraceId, setSelectedTraceId] = useState<string | null>(null);
   const [rootSpan, setRootSpan] = useState<Span | null>(null);
   const [selectedSpan, setSelectedSpan] = useState<Span | null>(null);
+
+  // Modal states
+  const [ragDebugSpanId, setRagDebugSpanId] = useState<string | null>(null);
+  const [forkModalData, setForkModalData] = useState<{ spanId: string, prompt: string } | null>(null);
 
   useEffect(() => {
     loadTraces();
@@ -77,11 +83,32 @@ function App() {
             </div>
           )}
 
-          <SpanDetails span={selectedSpan} />
+          <SpanDetails
+            span={selectedSpan}
+            onOpenRagDebug={(spanId) => setRagDebugSpanId(spanId)}
+            onOpenFork={(spanId, prompt) => setForkModalData({ spanId, prompt })}
+          />
         </div>
       </div>
+
+      {/* Modals */}
+      {ragDebugSpanId && (
+        <RagDebugPanel
+          spanId={ragDebugSpanId}
+          onClose={() => setRagDebugSpanId(null)}
+        />
+      )}
+
+      {forkModalData && (
+        <ForkModal
+          spanId={forkModalData.spanId}
+          originalPrompt={forkModalData.prompt}
+          onClose={() => setForkModalData(null)}
+        />
+      )}
     </div>
   );
 }
 
 export default App;
+
