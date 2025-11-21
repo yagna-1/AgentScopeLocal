@@ -2,6 +2,10 @@ import React, { useEffect, useState } from 'react';
 import type { Span } from '../utils/transform';
 import { fetchVectors } from '../api';
 import { Database, MessageSquare, Code, Search, GitBranch } from 'lucide-react';
+import { PerformanceMetrics } from './PerformanceMetrics';
+import { ContextWindowBar } from './ContextWindowBar';
+import { ResourceUsage } from './ResourceUsage';
+import { StreamingMetrics } from './StreamingMetrics';
 
 interface SpanDetailsProps {
     span: Span | null;
@@ -67,6 +71,44 @@ export const SpanDetails: React.FC<SpanDetailsProps> = ({ span, onOpenRagDebug, 
             </div>
 
             <div className="p-4 space-y-6">
+                {/* Week 6: Performance Metrics */}
+                <PerformanceMetrics
+                    ttft={span.attributes['llm.ttft_ms'] as number | undefined}
+                    tps={span.attributes['llm.tokens_per_second'] as number | undefined}
+                    generationTime={span.attributes['llm.generation_time_ms'] as number | undefined}
+                    temperature={span.attributes['gen_ai.request.temperature'] as number | undefined}
+                    topP={span.attributes['gen_ai.request.top_p'] as number | undefined}
+                    maxTokens={span.attributes['gen_ai.request.max_tokens'] as number | undefined}
+                    contextWindow={span.attributes['gen_ai.model.context_window'] as number | undefined}
+                />
+
+                {/* Week 6: Context Window Bar */}
+                {span.attributes['gen_ai.usage.prompt_tokens'] && span.attributes['gen_ai.model.context_window'] && (
+                    <ContextWindowBar
+                        used={span.attributes['gen_ai.usage.prompt_tokens'] as number}
+                        limit={span.attributes['gen_ai.model.context_window'] as number}
+                        warningThreshold={0.8}
+                    />
+                )}
+
+                {/* Week 6: Resource Usage */}
+                <ResourceUsage
+                    cpuPercent={span.attributes['system.cpu_percent'] as number | undefined}
+                    memoryMb={span.attributes['system.memory_mb'] as number | undefined}
+                    gpuUtilization={span.attributes['system.gpu_utilization'] as number | undefined}
+                    gpuMemoryUsedMb={span.attributes['system.gpu_memory_used_mb'] as number | undefined}
+                />
+
+                {/* Week 7: Streaming Metrics */}
+                <StreamingMetrics
+                    streamingEnabled={span.attributes['llm.streaming.enabled'] as boolean | undefined}
+                    ttft={span.attributes['llm.streaming.ttft_ms'] as number | undefined}
+                    chunkCount={span.attributes['llm.streaming.chunk_count'] as number | undefined}
+                    avgInterChunk={span.attributes['llm.streaming.avg_inter_chunk_ms'] as number | undefined}
+                    perTokenLatency={span.attributes['llm.streaming.per_token_ms'] as number | undefined}
+                    totalStreamTime={span.attributes['llm.streaming.total_time_ms'] as number | undefined}
+                />
+
                 {/* Attributes */}
                 <div>
                     <h4 className="text-sm font-medium text-gray-900 mb-2 flex items-center gap-2">

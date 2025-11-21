@@ -6,3 +6,4 @@ debug_flight_recorder.db
 frontend/node_modules/
 frontend/dist/
 .env
+server.log

@@ -46,7 +46,33 @@ class SQLiteSpanExporter(SpanExporter):
                     completion_tokens INTEGER,
                     total_tokens INTEGER,
                     reasoning_tokens INTEGER,
-                    estimated_cost_usd REAL
+                    estimated_cost_usd REAL,
+                    
+                    -- Performance metrics (Week 6)
+                    ttft_ms REAL,
+                    tokens_per_second REAL,
+                    generation_time_ms REAL,
+                    
+                    -- Model configuration (Week 6)
+                    temperature REAL,
+                    top_p REAL,
+                    top_k INTEGER,
+                    max_tokens INTEGER,
+                    context_window_size INTEGER,
+                    
+                    -- Resource monitoring (Week 6)
+                    cpu_percent REAL,
+                    memory_mb REAL,
+                    gpu_utilization REAL,
+                    gpu_memory_used_mb REAL,
+                    
+                    -- Streaming support (Week 7)
+                    streaming_enabled BOOLEAN DEFAULT FALSE,
+                    streaming_chunk_count INTEGER,
+                    streaming_ttft_ms REAL,
+                    streaming_total_time_ms REAL,
+                    streaming_avg_inter_chunk_ms REAL,
+                    streaming_per_token_ms REAL
                 );
             """)
             conn.execute("CREATE INDEX IF NOT EXISTS idx_trace_id ON spans(trace_id);")
@@ -105,6 +131,32 @@ class SQLiteSpanExporter(SpanExporter):
                 # Extract token usage and cost
                 usage = detector.extract_cost_info(attrs, provider)
                 
+                # Extract performance metrics (Week 6)
+                ttft_ms = attrs.get('llm.ttft_ms')
+                tokens_per_second = attrs.get('llm.tokens_per_second')
+                generation_time_ms = attrs.get('llm.generation_time_ms')
+                
+                # Extract model configuration (Week 6)
+                temperature = attrs.get('gen_ai.request.temperature')
+                top_p = attrs.get('gen_ai.request.top_p')
+                top_k = attrs.get('gen_ai.request.top_k')
+                max_tokens = attrs.get('gen_ai.request.max_tokens')
+                context_window_size = attrs.get('gen_ai.model.context_window')
+                
+                # Extract resource metrics (Week 6)
+                cpu_percent = attrs.get('system.cpu_percent')
+                memory_mb = attrs.get('system.memory_mb')
+                gpu_utilization = attrs.get('system.gpu_utilization')
+                gpu_memory_used_mb = attrs.get('system.gpu_memory_used_mb')
+                
+                # Extract streaming metrics (Week 7)
+                streaming_enabled = attrs.get('llm.streaming.enabled', False)
+                streaming_chunk_count = attrs.get('llm.streaming.chunk_count')
+                streaming_ttft_ms = attrs.get('llm.streaming.ttft_ms')
+                streaming_total_time_ms = attrs.get('llm.streaming.total_time_ms')
+                streaming_avg_inter_chunk_ms = attrs.get('llm.streaming.avg_inter_chunk_ms')
+                streaming_per_token_ms = attrs.get('llm.streaming.per_token_ms')
+                
                 data.append((
                     span_id, trace_id, parent_id, span.name, span.kind.name,
                     span.start_time, span.end_time, span.status.status_code.name,
@@ -119,7 +171,33 @@ class SQLiteSpanExporter(SpanExporter):
                     usage.get('completion_tokens'),
                     usage.get('total_tokens'),
                     usage.get('reasoning_tokens'),
-                    usage.get('estimated_cost_usd')
+                    usage.get('estimated_cost_usd'),
+                    
+                    # Performance metrics (Week 6)
+                    ttft_ms,
+                    tokens_per_second,
+                    generation_time_ms,
+                    
+                    # Model configuration (Week 6)
+                    temperature,
+                    top_p,
+                    top_k,
+                    max_tokens,
+                    context_window_size,
+                    
+                    # Resource metrics (Week 6)
+                    cpu_percent,
+                    memory_mb,
+                    gpu_utilization,
+                    gpu_memory_used_mb,
+                    
+                    # Streaming metrics (Week 7)
+                    streaming_enabled,
+                    streaming_chunk_count,
+                    streaming_ttft_ms,
+                    streaming_total_time_ms,
+                    streaming_avg_inter_chunk_ms,
+                    streaming_per_token_ms
                 ))
 
             with sqlite3.connect(self.db_path) as conn:
@@ -128,8 +206,13 @@ class SQLiteSpanExporter(SpanExporter):
                     (span_id, trace_id, parent_span_id, name, kind, start_time, end_time, 
                      status_code, status_message, attributes, events, resource,
                      provider, model_name, model_family, prompt_tokens, completion_tokens,
-                     total_tokens, reasoning_tokens, estimated_cost_usd)
-                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                     total_tokens, reasoning_tokens, estimated_cost_usd,
+                     ttft_ms, tokens_per_second, generation_time_ms,
+                     temperature, top_p, top_k, max_tokens, context_window_size,
+                     cpu_percent, memory_mb, gpu_utilization, gpu_memory_used_mb,
+                     streaming_enabled, streaming_chunk_count, streaming_ttft_ms,
+                     streaming_total_time_ms, streaming_avg_inter_chunk_ms, streaming_per_token_ms)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """, data)
                 
             return SpanExportResult.SUCCESS

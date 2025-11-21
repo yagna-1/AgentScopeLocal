@@ -107,12 +107,31 @@ def retrieve_relevant_docs(query: str, top_k: int = 3) -> list:
 
 
 def call_ollama_llm(prompt: str, context: list) -> str:
-    """Call Ollama LLM with context"""
+    """Call Ollama LLM with enhanced performance tracking"""
+    import time
+    from agentscope.performance_tracker import PerformanceTracker
+    from agentscope.resource_monitor import ResourceMonitor
+    
     with tracer.start_as_current_span("ollama_call") as span:
+        # Model configuration (Week 6: Configuration tracking)
+        temperature = 0.7
+        max_tokens = 500
+        
         # Set attributes for model detection
         span.set_attribute("gen_ai.system", "ollama")
         span.set_attribute("gen_ai.request.model", "qwen2.5:0.5b")
         span.set_attribute("gen_ai.prompt", prompt)
+        
+        # Track model configuration (Week 6)
+        span.set_attribute("gen_ai.request.temperature", temperature)
+        span.set_attribute("gen_ai.request.max_tokens", max_tokens)
+        span.set_attribute("gen_ai.model.context_window", 4096)  # qwen2.5 limit
+        
+        # Initialize performance tracker (Week 6)
+        tracker = PerformanceTracker(span)
+        
+        # Capture resource usage before call (Week 6)
+        ResourceMonitor.capture(span)
         
         # Build RAG prompt
         context_str = "\n".join([f"- {doc}" for doc in context])
@@ -127,6 +146,8 @@ Answer:"""
         
         print("💬 Calling Ollama LLM...")
         print(f"  Model: qwen2.5:0.5b")
+        print(f"  Temperature: {temperature}")
+        print(f"  Max tokens: {max_tokens}")
         print(f"  Context docs: {len(context)}")
         
         try:
@@ -135,7 +156,11 @@ Answer:"""
                 json={
                     "model": "qwen2.5:0.5b",
                     "prompt": full_prompt,
-                    "stream": False
+                    "stream": False,
+                    "options": {
+                        "temperature": temperature,
+                        "num_predict": max_tokens
+                    }
                 },
                 timeout=30
             )
@@ -146,12 +171,33 @@ Answer:"""
             span.set_attribute("gen_ai.completion", completion)
             
             # Track tokens
-            if "eval_count" in result:
-                span.set_attribute("gen_ai.usage.completion_tokens", result["eval_count"])
-            if "prompt_eval_count" in result:
-                span.set_attribute("gen_ai.usage.prompt_tokens", result["prompt_eval_count"])
+            completion_tokens = result.get("eval_count", 0)
+            prompt_tokens = result.get("prompt_eval_count", 0)
             
-            print(f"  ✓ Got response ({len(completion)} chars)\n")
+            if completion_tokens:
+                span.set_attribute("gen_ai.usage.completion_tokens", completion_tokens)
+                # Mark first token for TTFT (simulated for non-streaming)
+                tracker.mark_first_token()
+                # Set total tokens generated for TPS calculation
+                tracker.set_tokens(completion_tokens)
+            
+            if prompt_tokens:
+                span.set_attribute("gen_ai.usage.prompt_tokens", prompt_tokens)
+            
+            # Finalize performance metrics (Week 6)
+            tracker.finalize()
+            
+            # Get and display performance metrics
+            metrics = tracker.get_metrics()
+            print(f"  ✓ Got response ({len(completion)} chars)")
+            if 'ttft_ms' in metrics:
+                print(f"  ⚡ TTFT: {metrics['ttft_ms']:.0f}ms")
+            if 'tokens_per_second' in metrics:
+                print(f"  ⚡ Speed: {metrics['tokens_per_second']:.1f} tokens/sec")
+            if 'generation_time_ms' in metrics:
+                print(f"  ⚡ Total time: {metrics['generation_time_ms']:.0f}ms")
+            print()
+            
             return completion
             
         except requests.exceptions.ConnectionError:
@@ -165,6 +211,132 @@ Answer:"""
             span.set_attribute("error.message", str(e))
             print(f"  ✗ Error: {e}\n")
             return f"Error: {e}"
+
+
+def call_ollama_llm_streaming(prompt: str, context: list) -> str:
+    """Call Ollama LLM with streaming enabled (Week 7)"""
+    import json
+    from agentscope.streaming_tracker import StreamingTracker
+    from agentscope.resource_monitor import ResourceMonitor
+    
+    with tracer.start_as_current_span("ollama_call_streaming") as span:
+        # Model configuration
+        temperature = 0.7
+        max_tokens = 500
+        
+        # Set attributes for model detection
+        span.set_attribute("gen_ai.system", "ollama")
+        span.set_attribute("gen_ai.request.model", "qwen2.5:0.5b")
+        span.set_attribute("gen_ai.prompt", prompt)
+        
+        # Track model configuration
+        span.set_attribute("gen_ai.request.temperature", temperature)
+        span.set_attribute("gen_ai.request.max_tokens", max_tokens)
+        span.set_attribute("gen_ai.model.context_window", 4096)
+        
+        # Initialize streaming tracker (Week 7)
+        stream_tracker = StreamingTracker(span)
+        
+        # Capture resource usage
+        ResourceMonitor.capture(span)
+        
+        # Build RAG prompt
+        context_str = "\n".join([f"- {doc}" for doc in context])
+        full_prompt = f"""Based on the following context, answer the question:
+
+Context:
+{context_str}
+
+Question: {prompt}
+
+Answer:"""
+        
+        print("💬 Calling Ollama LLM (streaming)...")
+        print(f"  Model: qwen2.5:0.5b")
+        print(f"  Temperature: {temperature}")
+        print(f"  Max tokens: {max_tokens}")
+        print(f"  Context docs: {len(context)}")
+        print()
+        print("  📡 Streaming response: ", end="", flush=True)
+        
+        try:
+            response = requests.post(
+                "http://localhost:11434/api/generate",
+                json={
+                    "model": "qwen2.5:0.5b",
+                    "prompt": full_prompt,
+                    "stream": True,  # Enable streaming!
+                    "options": {
+                        "temperature": temperature,
+                        "num_predict": max_tokens
+                    }
+                },
+                stream=True,  # Important for streaming
+                timeout=60
+            )
+            response.raise_for_status()
+            
+            full_response = ""
+            chunk_count = 0
+            
+            # Process streaming chunks
+            for line in response.iter_lines():
+                if line:
+                    chunk = json.loads(line)
+                    chunk_text = chunk.get("response", "")
+                    
+                    if chunk_text:
+                        full_response += chunk_text
+                        stream_tracker.record_chunk(chunk_text)
+                        chunk_count += 1
+                        print(chunk_text, end="", flush=True)
+                    
+                    # Check if this is the final chunk
+                    if chunk.get("done", False):
+                        # Get token counts from final chunk
+                        completion_tokens = chunk.get("eval_count", 0)
+                        prompt_tokens = chunk.get("prompt_eval_count", 0)
+                        
+                        if prompt_tokens:
+                            span.set_attribute("gen_ai.usage.prompt_tokens", prompt_tokens)
+            
+            print()  # New line after streaming
+            
+            # Finalize streaming metrics (Week 7)
+            stream_tracker.finalize()
+            span.set_attribute("gen_ai.completion", full_response)
+            
+            # Get and display streaming metrics
+            metrics = stream_tracker.get_metrics()
+            print()
+            print(f"  ✓ Got response ({len(full_response)} chars)")
+            print(f"  📡 Chunks: {metrics.get('chunk_count', 0)}")
+            if 'ttft_ms' in metrics:
+                print(f"  ⚡ TTFT: {metrics['ttft_ms']:.0f}ms (first chunk)")
+            if 'tokens_per_second' in metrics:
+                print(f"  ⚡ Speed: {metrics['tokens_per_second']:.1f} tokens/sec")
+            if 'per_token_ms' in metrics:
+                print(f"  ⚡ Per-token latency: {metrics['per_token_ms']:.1f}ms")
+            if 'avg_inter_chunk_ms' in metrics:
+                print(f"  ⚡ Avg inter-chunk: {metrics['avg_inter_chunk_ms']:.1f}ms")
+            if 'total_time_ms' in metrics:
+                print(f"  ⚡ Total time: {metrics['total_time_ms']:.0f}ms")
+            print()
+            
+            return full_response
+            
+        except requests.exceptions.ConnectionError:
+            error_msg = "Ollama not running. Start with: ollama serve"
+            span.set_attribute("error", True)
+            span.set_attribute("error.message", error_msg)
+            print(f"\n  ✗ Error: {error_msg}\n")
+            return error_msg
+        except Exception as e:
+            span.set_attribute("error", True)
+            span.set_attribute("error.message", str(e))
+            print(f"\n  ✗ Error: {e}\n")
+            return f"Error: {e}"
+
 
 
 def chat(question: str):
