@@ -4,7 +4,7 @@
 
 AgentScope Local is a privacy-focused observability tool designed specifically for local LLM development. It captures, visualizes, and helps you debug your AI agents without sending data to the cloud.
 
-![AgentScope Local UI](https://raw.githubusercontent.com/placeholder/screenshot.png)
+![AgentScope Local UI](docs/images/ui_screenshot.png)
 
 ---
 
