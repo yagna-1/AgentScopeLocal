@@ -1,11 +1,18 @@
+"""
+FastAPI server for AgentScope Local
+Serves the web UI and provides APIs for trace analysis.
+"""
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 import sqlite3
 import json
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel
+from pathlib import Path
 
-app = FastAPI()
+app = FastAPI(title="AgentScope Local", version="1.0.0")
 
 # Enable CORS for frontend
 app.add_middleware(
@@ -296,7 +303,47 @@ def fork_span(span_id: str, request: ForkRequest):
             }
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"LLM call failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn.close()
+
+
+# ============================================================================
+# Static File Serving
+# ============================================================================
+
+# Mount static files from the built frontend
+FRONTEND_DIST = Path(__file__).parent / "frontend" / "dist"
+
+if FRONTEND_DIST.exists():
+    # Serve static assets
+    app.mount("/assets", StaticFiles(directory=str(FRONTEND_DIST / "assets")), name="assets")
+    
+    # Serve index.html for the root and any SPA routes
+    @app.get("/")
+    async def serve_root():
+        """Serve the React app"""
+        return FileResponse(str(FRONTEND_DIST / "index.html"))
+    
+    # Catch-all route for SPA routing (must be last)
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        """Serve the React app for all routes (SPA routing)"""
+        # If it's an API route, let FastAPI handle it
+        if full_path.startswith("api/") or full_path.startswith("traces/") or full_path.startswith("vectors/"):
+            raise HTTPException(status_code=404, detail="Not found")
+        
+        # Otherwise serve the React app
+        return FileResponse(str(FRONTEND_DIST / "index.html"))
+else:
+    @app.get("/")
+    async def no_frontend():
+        """Development mode - frontend not built"""
+        return {
+            "message": "AgentScope Local API is running",
+            "frontend": "not built (run 'npm run build' in frontend/)",
+            "api_docs": "/docs"
+        }
 
 
 if __name__ == "__main__":

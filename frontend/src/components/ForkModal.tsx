@@ -2,7 +2,7 @@
  * Time Travel Fork Modal
  * Allows re-running LLM calls with modified prompts
  */
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { GitBranch, Loader2, AlertCircle, Sparkles } from 'lucide-react';
 import axios from 'axios';
 

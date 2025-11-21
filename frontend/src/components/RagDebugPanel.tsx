@@ -2,7 +2,7 @@
  * RAG Debug Panel Component
  * Shows similar vectors and helps debug retrieval quality
  */
-import React, { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Search, AlertCircle, Loader2, CheckCircle } from 'lucide-react';
 import axios from 'axios';
 
@@ -50,7 +50,7 @@ export function RagDebugPanel({ spanId, onClose }: RagDebugPanelProps) {
         }
     };
 
-    React.useEffect(() => {
+    useEffect(() => {
         runDebug();
     }, [spanId]);
 
