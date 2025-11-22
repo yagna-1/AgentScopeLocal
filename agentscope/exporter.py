@@ -10,6 +10,7 @@ from .model_detector import detector
 class SQLiteSpanExporter(SpanExporter):
     def __init__(self, db_path: str):
         self.db_path = db_path
+        self.callback = None  # Callback for terminal UI
         self._init_schema()
 
     def _init_schema(self):
@@ -214,6 +215,11 @@ class SQLiteSpanExporter(SpanExporter):
                      streaming_total_time_ms, streaming_avg_inter_chunk_ms, streaming_per_token_ms)
                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """, data)
+            
+            # Call callback for each span (e.g., terminal UI)
+            if self.callback:
+                for span in spans:
+                    self.callback(span)
                 
             return SpanExportResult.SUCCESS
         except Exception as e:
@@ -222,5 +228,9 @@ class SQLiteSpanExporter(SpanExporter):
             traceback.print_exc()
             return SpanExportResult.FAILURE
 
+    def set_callback(self, callback):
+        """Set a callback function to be called when spans are exported."""
+        self.callback = callback
+    
     def shutdown(self):
         pass

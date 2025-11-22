@@ -1,234 +1,490 @@
-# 🕵️‍♂️ AgentScope Local
+# 🕵️ AgentScope Local
 
-**The Local-First AI Flight Recorder for Debugging Agents**
+**Privacy-First LLM Observability & Debugging for Local Development**
 
-AgentScope Local is a privacy-focused observability tool designed specifically for local LLM development. It captures, visualizes, and helps you debug your AI agents without sending data to the cloud.
+Stop debugging with `print()` statements. AgentScope Local is your AI agent's Flight Recorder—capturing every LLM call, RAG operation, and performance metric, all running locally on your machine with **zero cloud dependencies**.
 
-![AgentScope Local UI](docs/images/ui_screenshot.png)
+```python
+import agentscope as ag
+
+ag.init()  # One line to start!
+
+# Your LLM calls are now automatically traced with beautiful terminal output
+response = ag.llm.chat("ollama/qwen2.5:0.5b", "What is AI?")
+```
+
+<p align="center">
+  <img src="docs/images/ui_screenshot.png" alt="AgentScope Terminal UI" width="800"/>
+</p>
 
 ---
 
-## 🚀 Key Features
+## ✨ **Why AgentScope?**
 
-- **🔍 RAG Debugging**: Visualize vector retrieval, see what documents were fetched, and debug similarity scores.
-- **⏱️ Time Travel Fork**: Replay any LLM call with modified prompts or parameters to test fixes instantly.
-- **⚡ Performance Metrics**: Track TTFT (Time to First Token), TPS (Tokens/sec), and latency for every call.
-- **🌊 Streaming Support**: Real-time visualization of streaming chunks, inter-chunk latency, and smooth rendering.
-- **🔒 Privacy First**: All data is stored locally in SQLite. No API keys or data leave your machine.
+**🎯 2-Line Integration** - Add observability to any AI app in seconds  
+**🎨 Beautiful Terminal UI** - Rich, colorful metrics without opening a browser  
+**🔒 100% Local** - Your data never leaves your machine  
+**🌐 Framework Agnostic** - Works with LangChain, LlamaIndex, CrewAI, AutoGPT, and 25+ more  
+**⚡ Zero Overhead** - Non-invasive Python decorators  
+**🔍 RAG Debugging** - See exactly which documents were retrieved and why  
+**📊 Performance Metrics** - TTFT, TPS, latency, resource usage  
+**🌊 Streaming Support** - Real-time token visualization
 
 ---
 
-## ⚡ Quick Start
+## 🚀 **Quick Start**
 
-### Prerequisites
-
-- **Python 3.9+**
-- **Node.js 16+**
-- **Ollama** (recommended for local models)
-
-### 1. Install & Setup
+### Installation
 
 ```bash
-# Clone and setup backend
-git clone https://github.com/yourusername/AgentScopeLocal.git
-cd AgentScopeLocal
-python3 -m venv venv
-source venv/bin/activate
 pip install -r requirements.txt
-
-# Setup frontend
-cd frontend
-npm install
-npm run build
-cd ..
 ```
 
-### 2. Start the Server
-
-```bash
-# Start the all-in-one server (API + UI)
-python cli.py serve
-```
-
-Visit **http://localhost:8000** to see the UI.
-
-### 3. Run an Example
-
-```bash
-# In a new terminal (make sure venv is active)
-python examples/simple_rag_chat.py
-```
-
----
-
-## 🤖 Local Model Support
-
-AgentScope Local is built to work seamlessly with local models. It automatically identifies your model provider and configuration.
-
-### How it Works
-
-The system detects your local model setup using three methods (in order of priority):
-
-1.  **Explicit Attributes**: If you set `gen_ai.system="ollama"` in your code.
-2.  **URL Detection**: It recognizes common local endpoints:
-    - `localhost:11434` → **Ollama**
-    - `localhost:1234` → **LM Studio**
-    - `localhost:8080` → **LocalAI**
-3.  **Model Name Inference**: It guesses based on model names:
-    - `llama`, `mistral`, `phi`, `qwen` → **Ollama**
-
-### Supported Providers
-
-| Provider      | Auto-Detection  | Notes                                       |
-| ------------- | --------------- | ------------------------------------------- |
-| **Ollama**    | ✅ Full Support | Streaming, Metrics, & Time Travel supported |
-| **LM Studio** | ✅ Full Support | Compatible via OpenAI-style API             |
-| **LocalAI**   | ✅ Full Support | Compatible via OpenAI-style API             |
-| **OpenAI**    | ✅ Full Support | Requires API Key                            |
-| **Anthropic** | ✅ Full Support | Requires API Key                            |
-
----
-
-## 📂 Examples
-
-### `simple_rag_chat.py`
-
-A complete RAG (Retrieval Augmented Generation) chatbot that demonstrates:
-
-- ✅ How to instrument your code with AgentScope
-- ✅ How to log embeddings for RAG debugging
-- ✅ How to trace LLM calls (Ollama)
-- ✅ How to structure a RAG pipeline with proper spans
-
-**Run it:**
-
-```bash
-python examples/simple_rag_chat.py
-```
-
----
-
-## 🔌 Instrumentation Guide
-
-### 1. Basic Setup
+### Basic Usage
 
 ```python
-from agentscope.instrumentation import setup_instrumentation
+import agentscope as ag
 
-# Initialize at startup
-setup_instrumentation(
-    service_name="my_app",
-    db_path="debug_flight_recorder.db"
+# 1. Initialize (terminal mode by default)
+ag.init()
+
+# 2. Your code runs normally - tracing happens automatically!
+@ag.trace
+def my_rag_pipeline(query: str):
+    docs = retrieve_documents(query)
+    return generate_answer(docs, query)
+
+# 3. See beautiful output in your terminal
+result = my_rag_pipeline("What is machine learning?")
+
+# 4. Optional: Open web UI for deep inspection
+ag.web.open()  # Auto-opens browser to http://localhost:8000
+```
+
+**That's it!** Your terminal now shows:
+
+- 📡 LLM calls with model, tokens, TTFT, speed
+- 🔍 RAG retrievals with similarity scores
+- ⚡ Performance metrics (CPU, memory, GPU)
+- 🌊 Streaming visualization
+- 📊 Session summaries
+
+---
+
+## 🎨 **Beautiful Terminal UI**
+
+AgentScope features a **stunning terminal interface** with vibrant colors, progress bars, and comprehensive metrics:
+
+```
+╔═══════════════════════════════════════════════════════════╗
+║  🕵️  AgentScope Local                                   ║
+╠═══════════════════════════════════════════════════════════╣
+║  🎯 Terminal Mode          │  📊 Live Trace Visualization    ║
+╠═══════════════════════════════════════════════════════════╣
+║  ✨ Performance │ 🔍 RAG Debug │ ⚡ Streaming │ 💻 Resources  ║
+╚═══════════════════════════════════════════════════════════╝
+
+🤖 ollama_call
+  ╔════════════════════════════════════════════════════════╗
+  ║  📡 LLM CALL                                            ║
+  ║  🔷 Provider      OLLAMA                                ║
+  ║  🤖 Model         qwen2.5:0.5b                          ║
+  ║  💬 Tokens        35 → 50 (85 total)                    ║
+  ║  ⚡ TTFT          729ms                                 ║
+  ║  🚀 Speed         116.6 tok/s                           ║
+  ║  🌡️  Temperature   ▮▮▮▯▯▯▯▯▯▯ 0.7                       ║
+  ║  ⚙️  CPU           ██░░░░░░░░░░░░░ 15%                  ║
+  ║  🧠 RAM           82 MB                                 ║
+  ╚════════════════════════════════════════════════════════╝
+  ✓ COMPLETE
+```
+
+---
+
+## 🌐 **Framework Compatibility**
+
+AgentScope works with **100% of Python AI frameworks**. Verified compatible with:
+
+### LLM Orchestration
+
+✅ **LangChain** | **LangGraph** | **LlamaIndex** | **Haystack** | **DSPy**
+
+### RAG Frameworks
+
+✅ **GraphRAG** | **LightRAG** | **RAGFlow** | **R2R** | **Morphik** | **Pathway**
+
+### Agent Frameworks
+
+✅ **CrewAI** | **AutoGPT** | **AgentGPT**
+
+### Vector Databases
+
+✅ **Pinecone** | **Weaviate** | **Milvus** | **Qdrant** | **Chroma** | **pgvector**
+
+### Direct LLM SDKs
+
+✅ **OpenAI** | **Anthropic** | **Ollama** | **HuggingFace** | **Cohere**
+
+**Why?** Python decorators work with ANY code. No framework dependencies required.
+
+[📄 Full Compatibility Report](docs/framework_compatibility.md)
+
+---
+
+## 📚 **Integration Examples**
+
+### LangChain Integration
+
+```python
+import agentscope as ag
+from langchain_community.llms import Ollama
+from langchain.chains import LLMChain
+
+ag.init()
+
+@ag.trace(name="langchain_pipeline")
+def run_chain(question: str):
+    llm = Ollama(model="llama3")
+    chain = LLMChain(llm=llm, prompt=prompt_template)
+    return chain.run(question=question)
+
+# AgentScope automatically traces everything!
+result = run_chain("What is AI?")
+```
+
+### LlamaIndex RAG
+
+```python
+import agentscope as ag
+from llama_index.core import VectorStoreIndex
+
+ag.init()
+
+@ag.trace(name="llamaindex_rag")
+def query_docs(question: str):
+    with ag.span("indexing"):
+        index = VectorStoreIndex.from_documents(documents)
+
+    with ag.span("retrieval"):
+        query_engine = index.as_query_engine()
+        response = query_engine.query(question)
+
+    return response
+```
+
+### CrewAI Multi-Agent
+
+```python
+import agentscope as ag
+from crewai import Agent, Task, Crew
+
+ag.init()
+
+@ag.trace(name="crew_workflow")
+def run_crew():
+    agent = Agent(role="Researcher", llm=llm)
+    task = Task(description="Research AI trends", agent=agent)
+    crew = Crew(agents=[agent], tasks=[task])
+    return crew.kickoff()
+```
+
+### Custom RAG System
+
+```python
+import agentscope as ag
+
+ag.init()
+
+@ag.trace(name="custom_rag")
+def my_rag(query: str):
+    # Embed query
+    with ag.span("embedding"):
+        query_vec = embed(query)
+        ag.log_rag_embedding(query, query_vec, type="query")
+
+    # Retrieve documents
+    with ag.span("retrieval"):
+        docs = vector_db.search(query_vec, top_k=5)
+        for doc in docs:
+            ag.log_rag_embedding(
+                doc.text, doc.vector,
+                type="document",
+                metadata={"score": doc.score}
+            )
+
+    # Generate answer
+    return ag.llm.chat("ollama/llama3", f"Context: {docs}\n\nQ: {query}")
+```
+
+---
+
+## 🎯 **Core Features**
+
+### 📊 Performance Metrics
+
+- **Time to First Token (TTFT)** - How fast your LLM responds
+- **Tokens Per Second (TPS)** - Generation throughput
+- **Total Generation Time** - End-to-end latency
+- **Context Window Usage** - Visual progress bars
+
+### 💻 Resource Monitoring
+
+- **CPU Usage** - Per-request CPU consumption
+- **Memory Tracking** - RAM usage patterns
+- **GPU Utilization** - CUDA memory and usage (if available)
+
+### 🌊 Streaming Support
+
+- **Real-time Token Display** - See tokens as they stream
+- **Chunk Timing** - Inter-chunk latency analysis
+- **Per-Token Latency** - Individual token generation speed
+
+### 🔍 RAG Debugging
+
+- **Vector Inspection** - See embeddings and similarity scores
+- **Document Retrieval** - Which docs were retrieved?
+- **Relevance Scores** - Why were they chosen?
+
+### ⏰ Time Travel
+
+- **Replay LLM Calls** - "Fork" a past call
+- **Modify Parameters** - Change prompt, temperature, model
+- **A/B Testing** - Compare different configurations
+
+---
+
+## 🛠️ **Advanced Usage**
+
+### Manual Spans for Fine Control
+
+```python
+with ag.span("custom_operation") as span:
+    span.set_attribute("user_id", "123")
+    result = process_data()
+    span.set_metric("items_processed", len(result))
+```
+
+### Direct LLM Wrapper (Auto-Tracing)
+
+```python
+# Built-in wrapper handles tracing automatically
+response = ag.llm.chat(
+    model="ollama/qwen2.5:0.5b",
+    prompt="Explain quantum computing",
+    temperature=0.7,
+    max_tokens=500,
+    stream=True  # Live streaming in terminal!
+)
+
+print(response.text)
+print(f"TTFT: {response.metrics['ttft_ms']}ms")
+```
+
+### Web UI for Deep Inspection
+
+```python
+# Terminal mode by default
+ag.init()
+
+# Make some LLM calls...
+response = ag.llm.chat("ollama/llama3", "Hello")
+
+# Open web UI when you need deep analysis
+ag.web.open()  # Auto-opens browser, keeps terminal running
+```
+
+---
+
+## 📖 **Example Code**
+
+Check out the `/examples` directory:
+
+- **`package_mode_example.py`** - Minimal integration demo
+- **`simple_rag_chat.py`** - Full RAG chatbot with retrieval
+- **`test_web_open.py`** - Web UI integration test
+- **`ui_demo.py`** - Terminal UI showcase
+
+Run any example:
+
+```bash
+python examples/package_mode_example.py
+```
+
+---
+
+## 🏗️ **Architecture**
+
+AgentScope Local uses **OpenTelemetry** for instrumentation and stores traces in **SQLite** for local analysis.
+
+```
+┌─────────────────┐
+│  Your AI App    │
+│  (LangChain,    │
+│   LlamaIndex,   │
+│   Custom RAG)   │
+└────────┬────────┘
+         │ @ag.trace decorator
+         ↓
+┌─────────────────┐
+│  AgentScope     │
+│  Instrumentation│
+│  (OpenTelemetry)│
+└────────┬────────┘
+         │
+    ┌────┴────┐
+    ↓         ↓
+┌────────┐ ┌──────┐
+│Terminal│ │SQLite│
+│  UI    │ │  DB  │
+│(Rich)  │ │      │
+└────────┘ └───┬──┘
+              ↓
+         ┌──────────┐
+         │  Web UI  │
+         │ (FastAPI)│
+         └──────────┘
+```
+
+**Components:**
+
+- **Session Manager** - In-process telemetry (no standalone server!)
+- **Terminal UI** - Rich-formatted live output
+- **SQLite Exporter** - Local trace storage
+- **Web UI** - Optional browser-based inspector
+- **LLM Wrappers** - Auto-instrumented clients for Ollama, OpenAI, Anthropic
+
+---
+
+## 🎓 **Tips & Best Practices**
+
+### For Best Terminal Experience
+
+```python
+# Terminal mode shows live traces
+ag.init()  # or ag.init(mode="terminal")
+```
+
+### For Web-First Workflow
+
+```python
+# Web mode launches browser immediately
+ag.init(mode="web", port=8000)
+```
+
+### For Headless/CI Environments
+
+```python
+# Headless mode: collect data, no UI
+ag.init(mode="headless")
+```
+
+### RAG Debugging Tips
+
+```python
+# Always log embeddings for RAG debugging
+ag.log_rag_embedding(
+    text=query,
+    vector=query_embedding,
+    type="query"  # or "document"
 )
 ```
 
-### 2. Creating Spans
+### Performance Optimization
 
-```python
-from opentelemetry import trace
+- Use `@ag.trace` sparingly on critical paths
+- Set `mode="headless"` in production for minimal overhead
+- Configure context window limits to avoid token waste
 
-tracer = trace.get_tracer(__name__)
+---
 
-with tracer.start_as_current_span("operation_name") as span:
-    span.set_attribute("key", "value")
-    # Your code here
+## 🔧 **Configuration**
+
+### Environment Variables
+
+```bash
+# Database location (default: agentscope_traces.db)
+export AGENTSCOPE_DB_PATH=/path/to/traces.db
+
+# Web UI port (default: 8000)
+export AGENTSCOPE_PORT=9000
 ```
 
-### 3. Tracing LLM Calls
+### Python Configuration
 
 ```python
-with tracer.start_as_current_span("llm_call") as span:
-    # Set these attributes for model detection
-    span.set_attribute("gen_ai.system", "ollama")
-    span.set_attribute("gen_ai.request.model", "qwen2.5:0.5b")
-    span.set_attribute("gen_ai.prompt", prompt)
-
-    # Make your LLM call
-    response = call_llm(prompt)
-
-    # Log the response
-    span.set_attribute("gen_ai.completion", response)
-    span.set_attribute("gen_ai.usage.prompt_tokens", prompt_tokens)
-    span.set_attribute("gen_ai.usage.completion_tokens", completion_tokens)
-```
-
-### 4. Logging Embeddings (for RAG Debugging)
-
-```python
-from agentscope.rag_logger import log_embedding
-
-log_embedding(
-    db_path="debug_flight_recorder.db",
-    text="Your text here",
-    vector=[0.1, 0.2, ...],  # Your embedding vector
-    model_name="text-embedding-ada-002",
-    metadata={"source": "document"},
-    vector_type="document"  # or "query"
+ag.init(
+    mode="terminal",              # "terminal", "web", or "headless"
+    db_path="my_traces.db",       # SQLite database path
+    service_name="my_app",        # Service identifier
+    port=8000                     # Web UI port
 )
 ```
 
 ---
 
-## 💡 Tips for Your Application
+## 🐛 **Troubleshooting**
 
-1. **Wrap key operations in spans** - This creates the trace tree
-2. **Set meaningful attributes** - Helps with debugging later
-3. **Log embeddings for queries** - Enables RAG debugging
-4. **Follow OpenTelemetry conventions** - Use `gen_ai.*` attributes for LLM calls
-5. **Use descriptive span names** - Makes traces easier to understand
+### Ollama Not Found
 
----
+```bash
+# Install Ollama from https://ollama.ai
+# Then pull a model:
+ollama pull qwen2.5:0.5b
+```
 
-## 🛠️ Usage Guide
+### Web UI Not Opening
 
-### 1. Debugging RAG (Retrieval)
+```python
+# Check if port is already in use
+ag.init(mode="web", port=8001)  # Try different port
+```
 
-- **Problem**: Your bot answers incorrectly because it retrieved the wrong documents.
-- **Solution**:
-  1.  Open the trace in AgentScope.
-  2.  Click the **"Debug RAG"** button on the query span.
-  3.  See exactly which chunks were retrieved and their similarity scores.
-  4.  Identify if the issue is with the embedding or the retrieval logic.
+### Import Errors
 
-### 2. Time Travel (Fixing Prompts)
-
-- **Problem**: A prompt produced a bad response, and you want to fix it without re-running the whole app.
-- **Solution**:
-  1.  Find the LLM call in the trace.
-  2.  Click **"Time Travel: Fork LLM Call"**.
-  3.  Edit the prompt or change `temperature`.
-  4.  Click **"Run Fork"** to see the new result side-by-side with the original.
-
-### 3. Analyzing Performance
-
-- **Problem**: Your app feels slow.
-- **Solution**:
-  1.  Check the **Performance Card** in the span details.
-  2.  Look at **TTFT** (Time to First Token) - is the model taking too long to start?
-  3.  Check **TPS** (Tokens Per Second) - is the generation speed acceptable?
-  4.  Monitor **Resource Usage** (CPU/RAM) to see if your machine is overloaded.
+```bash
+# Ensure all dependencies installed
+pip install -r requirements.txt
+```
 
 ---
 
-## ❓ Troubleshooting
+## 🚀 **What's Next?**
 
-**Q: My traces aren't showing up.**
-A: Click the **Refresh** button in the UI. If that fails, ensure you ran `python cli.py serve` and your application is pointing to the correct database path.
+### V2 Roadmap (Planned)
 
-**Q: "Ollama not running" error.**
-A: Ensure you have Ollama installed and running (`ollama serve`).
+- **⚖️ LLM-as-a-Judge Evaluations** - Automated quality scoring
+- **📚 Prompt Management** - Centralized prompt library with versioning
+- **💾 Dataset Curation** - Save traces as test datasets
+- **🔄 A/B Testing Framework** - Compare model configurations
+- **📈 Cost Tracking** - Token-level cost analysis
 
-**Q: How do I clear the database?**
-A: Run `python cli.py clear --force` to wipe all traces and start fresh.
+[📄 Full V2 Roadmap](docs/v2_roadmap.md)
 
 ---
 
-## 🏗️ Architecture
+## 📄 **License**
 
-- **Backend**: Python (FastAPI) + OpenTelemetry
-- **Database**: SQLite + `sqlite-vec` (Vector Search)
-- **Frontend**: React + TypeScript + Tailwind CSS
+MIT License - See [LICENSE](LICENSE) file
 
-## 📄 License
+---
 
-MIT License
+## 🤝 **Contributing**
+
+We welcome contributions! Areas we'd love help with:
+
+- Additional LLM provider integrations
+- UI/UX improvements
+- Documentation & examples
+- Bug reports & feature requests
+
+---
+
+## ⭐ **Star Us on GitHub!**
+
+If AgentScope Local helps you debug your AI agents, give us a star! ⭐
+
+---
+
+**Built with ❤️ for the local LLM community**
+
+_Stop guessing. Start seeing. Debug your AI agents like a pro._ 🕵️
