@@ -4,7 +4,7 @@ Tests the new API endpoints for similarity search and LLM forking.
 """
 import requests
 import json
-from test_model_detection import mock_llm_call, mock_embedding
+from tests.unit.test_model_detection_legacy import mock_llm_call, mock_embedding
 from opentelemetry import trace
 from agentscope.instrumentation import setup_instrumentation
 from agentscope.rag_logger import log_embedding

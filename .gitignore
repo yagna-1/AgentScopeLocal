@@ -14,4 +14,11 @@ server.log
 *.db-journal
 *.db-wal
 agentscope_traces.db
+
+# Testing & Coverage
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+coverage.xml
 .env
