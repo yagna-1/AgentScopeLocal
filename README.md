@@ -448,20 +448,6 @@ pip install -r requirements.txt
 
 ---
 
-## 🚀 **What's Next?**
-
-### V2 Roadmap (Planned)
-
-- **⚖️ LLM-as-a-Judge Evaluations** - Automated quality scoring
-- **📚 Prompt Management** - Centralized prompt library with versioning
-- **💾 Dataset Curation** - Save traces as test datasets
-- **🔄 A/B Testing Framework** - Compare model configurations
-- **📈 Cost Tracking** - Token-level cost analysis
-
-[📄 Full V2 Roadmap](docs/v2_roadmap.md)
-
----
-
 ## 📄 **License**
 
 MIT License - See [LICENSE](LICENSE) file
